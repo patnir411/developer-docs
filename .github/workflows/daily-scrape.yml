@@ -1,0 +1,133 @@
+name: Daily Documentation Scrape
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: '0 2 * * *'
+
+  workflow_dispatch:  # Allow manual triggers
+    inputs:
+      source:
+        description: 'Source to scrape (all, gemini, python, vertex)'
+        required: false
+        default: 'all'
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for change tracking
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            scrapers/package-lock.json
+            change-tracker/package-lock.json
+
+      - name: Install scraper dependencies
+        working-directory: ./scrapers
+        run: npm ci
+
+      - name: Install change tracker dependencies
+        working-directory: ./change-tracker
+        run: npm ci
+
+      - name: Run scraper
+        working-directory: ./scrapers
+        run: |
+          if [ "${{ github.event.inputs.source }}" != "" ]; then
+            npm run scrape -- --source=${{ github.event.inputs.source }}
+          else
+            npm run scrape:all
+          fi
+        env:
+          NODE_ENV: production
+
+      - name: Track changes
+        working-directory: ./change-tracker
+        run: npm run track
+        continue-on-error: true
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changes == 'true'
+        run: |
+          git config user.name "Gemini Docs Bot"
+          git config user.email "bot@gemini-docs-tracker.dev"
+
+          git add -A
+
+          # Get summary from scrape results
+          SUMMARY=$(cat .scrape-summary.json 2>/dev/null | jq -r '.endTime' || echo "$(date -u +%Y-%m-%d)")
+
+          git commit -m "📚 Daily documentation update - $SUMMARY" -m "Automated scrape and documentation update
+
+- Scraped latest Gemini API documentation
+- Updated method references
+- Generated changelog for changes
+- Tracked version updates
+
+[skip ci]"
+
+          git push
+
+      - name: Create issue on breaking changes
+        if: steps.check_changes.outputs.changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Check if there are breaking changes
+            const changelogPath = './changelog/LATEST.md';
+            if (!fs.existsSync(changelogPath)) {
+              return;
+            }
+
+            const changelog = fs.readFileSync(changelogPath, 'utf8');
+
+            if (changelog.includes('⚠️ Breaking Changes')) {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `⚠️ Breaking Changes Detected - ${new Date().toISOString().split('T')[0]}`,
+                body: `# Breaking Changes Detected\n\nThe daily documentation scrape has detected breaking changes in the Gemini API.\n\n## Changelog\n\n${changelog}\n\n---\n\nPlease review these changes and update any affected code or documentation.`,
+                labels: ['breaking-change', 'automated']
+              });
+
+              console.log('Created issue:', issue.data.html_url);
+            }
+
+      - name: Upload scrape summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-summary-${{ github.run_number }}
+          path: .scrape-summary.json
+          retention-days: 30
+
+      - name: Upload changelog
+        if: steps.check_changes.outputs.changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog-${{ github.run_number }}
+          path: changelog/LATEST.md
+          retention-days: 90

@@ -1,0 +1,169 @@
+name: Real-time Documentation Monitor
+
+on:
+  push:
+    paths:
+      - 'gemini-api/**'
+      - 'sdks/**'
+      - 'vertex-ai/**'
+      - 'changelog/**'
+
+  pull_request:
+    paths:
+      - 'gemini-api/**'
+      - 'sdks/**'
+      - 'vertex-ai/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check for broken links
+        run: |
+          echo "Checking for broken internal links..."
+
+          # Find all markdown files
+          find . -name "*.md" -not -path "*/node_modules/*" -not -path "*/.git/*" | while read file; do
+            # Extract markdown links
+            grep -oP '\[.*?\]\(\K[^)]+' "$file" | while read link; do
+              # Check if it's an internal link (relative path)
+              if [[ ! "$link" =~ ^https?:// ]] && [[ ! "$link" =~ ^# ]]; then
+                # Resolve the link path
+                dir=$(dirname "$file")
+                target="$dir/$link"
+
+                # Check if target exists
+                if [ ! -f "$target" ]; then
+                  echo "❌ Broken link in $file: $link"
+                  exit 1
+                fi
+              fi
+            done
+          done
+
+          echo "✓ All internal links are valid"
+
+      - name: Validate JSON files
+        run: |
+          echo "Validating JSON files..."
+
+          find . -name "*.json" -not -path "*/node_modules/*" -not -path "*/.git/*" | while read file; do
+            if ! jq empty "$file" 2>/dev/null; then
+              echo "❌ Invalid JSON: $file"
+              exit 1
+            fi
+          done
+
+          echo "✓ All JSON files are valid"
+
+      - name: Check markdown formatting
+        run: |
+          echo "Checking markdown formatting..."
+
+          # Install markdownlint
+          npm install -g markdownlint-cli
+
+          # Run markdownlint (will use .markdownlint.json if it exists)
+          markdownlint '**/*.md' --ignore node_modules --ignore .git || true
+
+          echo "✓ Markdown check complete"
+
+      - name: Check for large files
+        run: |
+          echo "Checking for large files..."
+
+          # Find files larger than 1MB
+          large_files=$(find . -type f -size +1M -not -path "*/node_modules/*" -not -path "*/.git/*")
+
+          if [ -n "$large_files" ]; then
+            echo "⚠️ Warning: Large files detected:"
+            echo "$large_files"
+          else
+            echo "✓ No large files found"
+          fi
+
+  test-cli:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CLI dependencies
+        working-directory: ./cli
+        run: npm ci || npm install
+
+      - name: Build CLI
+        working-directory: ./cli
+        run: npm run build
+
+      - name: Test CLI commands
+        working-directory: ./cli
+        run: |
+          # Test that CLI builds successfully
+          node dist/index.js --version
+
+          # Test help command
+          node dist/index.js --help
+
+          echo "✓ CLI tests passed"
+
+  update-summary:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: [validate, test-cli]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate documentation summary
+        run: |
+          echo "# Documentation Summary" > DOCS_SUMMARY.md
+          echo "" >> DOCS_SUMMARY.md
+          echo "**Last Updated**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> DOCS_SUMMARY.md
+          echo "" >> DOCS_SUMMARY.md
+
+          # Count files by category
+          echo "## Statistics" >> DOCS_SUMMARY.md
+          echo "" >> DOCS_SUMMARY.md
+
+          total_md=$(find . -name "*.md" -not -path "*/node_modules/*" -not -path "*/.git/*" | wc -l)
+          echo "- Total Markdown Files: $total_md" >> DOCS_SUMMARY.md
+
+          methods=$(find ./gemini-api/methods -name "*.md" 2>/dev/null | wc -l)
+          echo "- Methods Documented: $methods" >> DOCS_SUMMARY.md
+
+          models=$(find ./gemini-api/models -name "*.md" 2>/dev/null | wc -l)
+          echo "- Models Documented: $models" >> DOCS_SUMMARY.md
+
+          guides=$(find ./gemini-api/guides -name "*.md" 2>/dev/null | wc -l)
+          echo "- Guides: $guides" >> DOCS_SUMMARY.md
+
+          echo "" >> DOCS_SUMMARY.md
+          echo "✓ Summary generated"
+
+      - name: Commit summary
+        run: |
+          if [ -n "$(git status --porcelain DOCS_SUMMARY.md)" ]; then
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git add DOCS_SUMMARY.md
+            git commit -m "📊 Update documentation summary [skip ci]"
+            git push
+          fi
+        continue-on-error: true

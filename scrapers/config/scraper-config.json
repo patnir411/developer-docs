@@ -1,0 +1,132 @@
+{
+  "sources": {
+    "gemini": {
+      "baseUrl": "https://ai.google.dev",
+      "paths": [
+        "/gemini-api/docs",
+        "/gemini-api/docs/models",
+        "/gemini-api/docs/function-calling",
+        "/gemini-api/docs/vision",
+        "/gemini-api/docs/audio",
+        "/gemini-api/docs/structured-output",
+        "/gemini-api/docs/thinking",
+        "/gemini-api/docs/caching",
+        "/gemini-api/docs/tuning"
+      ],
+      "enabled": true,
+      "priority": 1
+    },
+    "pythonSDK": {
+      "baseUrl": "https://ai.google.dev/api/python/google/generativeai",
+      "paths": [
+        "",
+        "/models",
+        "/types",
+        "/client"
+      ],
+      "enabled": true,
+      "priority": 2
+    },
+    "restAPI": {
+      "baseUrl": "https://ai.google.dev/api",
+      "paths": [
+        "/rest",
+        "/rest/v1beta/models",
+        "/rest/v1beta/cachedContents"
+      ],
+      "enabled": true,
+      "priority": 3
+    },
+    "vertexAI": {
+      "baseUrl": "https://cloud.google.com/vertex-ai/generative-ai/docs",
+      "paths": [
+        "",
+        "/model-reference/gemini",
+        "/multimodal/overview",
+        "/grounding/overview",
+        "/learn/models"
+      ],
+      "enabled": true,
+      "priority": 4
+    },
+    "github": {
+      "repos": [
+        "google/generative-ai-python",
+        "google/generative-ai-js",
+        "google/generative-ai-go"
+      ],
+      "enabled": true,
+      "priority": 5
+    }
+  },
+  "scraping": {
+    "userAgent": "Gemini-Docs-Tracker/1.0 (Educational Purpose; +https://github.com/gemini-docs-tracker)",
+    "rateLimiting": {
+      "requestsPerSecond": 2,
+      "maxConcurrent": 5,
+      "retryAttempts": 3,
+      "retryDelay": 2000,
+      "exponentialBackoff": true
+    },
+    "timeout": 30000,
+    "followRedirects": true,
+    "maxRedirects": 5
+  },
+  "parsing": {
+    "selectors": {
+      "gemini": {
+        "mainContent": "main, article, .content, .documentation",
+        "title": "h1, .title",
+        "sections": "h2, h3, h4",
+        "codeBlocks": "pre code, .highlight",
+        "tables": "table",
+        "links": "a[href]"
+      },
+      "pythonSDK": {
+        "mainContent": ".devsite-article-body",
+        "methods": ".devsite-article-body h2",
+        "parameters": "table.responsive",
+        "codeExamples": "pre.prettyprint"
+      }
+    },
+    "exclusions": {
+      "selectors": [
+        "nav",
+        "footer",
+        "header",
+        ".sidebar",
+        ".navigation",
+        ".cookie-banner",
+        ".feedback"
+      ]
+    }
+  },
+  "output": {
+    "docsDir": "../gemini-api",
+    "snapshotsDir": "../change-tracker/snapshots",
+    "changelogDir": "../changelog",
+    "format": {
+      "markdown": true,
+      "json": true,
+      "yaml": false
+    },
+    "prettify": true,
+    "includeMetadata": true
+  },
+  "cache": {
+    "enabled": true,
+    "ttl": 3600,
+    "checkPeriod": 600
+  },
+  "validation": {
+    "checkLinks": true,
+    "validateSchema": true,
+    "minContentLength": 100,
+    "allowedDomains": [
+      "ai.google.dev",
+      "cloud.google.com",
+      "github.com",
+      "googleapis.dev"
+    ]
+  }
+}
