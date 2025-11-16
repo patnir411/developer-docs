@@ -9,6 +9,8 @@ import { ChangelogCommand } from './commands/changelog';
 import { ExportCommand } from './commands/export';
 import { InteractiveCommand } from './commands/interactive';
 import { StatsCommand } from './commands/stats';
+import { ApiCommand } from './commands/api';
+import { CliDocsCommand } from './commands/cli-docs';
 
 const program = new Command();
 
@@ -18,15 +20,20 @@ program
   .version('1.0.0')
   .addHelpText('after', `
 ${chalk.bold('Examples:')}
-  ${chalk.cyan('$ gemini-docs search "generate content"')}      Search for documentation
-  ${chalk.cyan('$ gemini-docs method generateContent')}         Show method details
-  ${chalk.cyan('$ gemini-docs models')}                         List all Gemini models
+  ${chalk.cyan('$ gemini-docs search "generate content"')}      Search all documentation
+  ${chalk.cyan('$ gemini-docs api --action models')}            List Gemini API models
+  ${chalk.cyan('$ gemini-docs cli --action commands')}          List Gemini CLI commands
+  ${chalk.cyan('$ gemini-docs method generateContent')}         Show API method details
   ${chalk.cyan('$ gemini-docs changelog --since 2024-01-01')}   Show recent changes
   ${chalk.cyan('$ gemini-docs interactive')}                    Launch interactive mode
 
-${chalk.bold('Documentation Location:')}
-  All documentation is stored locally in markdown format
-  and can be accessed offline after the initial scrape.
+${chalk.bold('Dual Tracking:')}
+  This tool tracks TWO documentation sources:
+  ${chalk.blue('🔷 Gemini API')} - Google's official API docs (ai.google.dev)
+  ${chalk.yellow('🔶 Gemini CLI')} - CLI tool documentation (geminicli.com)
+
+  Use ${chalk.cyan('gemini-docs api')} for API docs
+  Use ${chalk.cyan('gemini-docs cli')} for CLI docs
   `);
 
 // Search command
@@ -97,6 +104,26 @@ program
   .option('--json', 'Output as JSON')
   .action(async (options) => {
     const cmd = new StatsCommand();
+    await cmd.execute(options);
+  });
+
+// API command (Gemini API docs)
+program
+  .command('api')
+  .description('Browse Gemini API documentation (Google official)')
+  .option('-a, --action <action>', 'Action (list, models, methods, stats)', 'list')
+  .action(async (options) => {
+    const cmd = new ApiCommand();
+    await cmd.execute(options);
+  });
+
+// CLI command (Gemini CLI tool docs)
+program
+  .command('cli')
+  .description('Browse Gemini CLI documentation (geminicli.com)')
+  .option('-a, --action <action>', 'Action (list, commands, categories, stats)', 'list')
+  .action(async (options) => {
+    const cmd = new CliDocsCommand();
     await cmd.execute(options);
   });
 
