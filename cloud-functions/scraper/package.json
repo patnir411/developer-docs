@@ -1,0 +1,22 @@
+{
+  "name": "gemini-docs-scraper-function",
+  "version": "1.0.0",
+  "description": "Minimal-dependency Cloud Function for scraping Gemini documentation",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "gcloud functions deploy gemini-docs-scraper --gen2 --runtime=nodejs20 --region=us-central1 --source=. --entry-point=scrapeHandler --trigger-http --allow-unauthenticated=false"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.7.0",
+    "@google-cloud/firestore": "^7.1.0",
+    "cheerio": "^1.0.0-rc.12",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@google-cloud/functions-framework": "^3.3.0"
+  }
+}

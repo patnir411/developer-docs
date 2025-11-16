@@ -27,6 +27,14 @@
       "enabled": true,
       "priority": 2
     },
+    "geminiCLI": {
+      "baseUrl": "https://geminicli.com",
+      "paths": [
+        "/docs"
+      ],
+      "enabled": true,
+      "priority": 2.5
+    },
     "restAPI": {
       "baseUrl": "https://ai.google.dev/api",
       "paths": [
@@ -126,7 +134,8 @@
       "ai.google.dev",
       "cloud.google.com",
       "github.com",
-      "googleapis.dev"
+      "googleapis.dev",
+      "geminicli.com"
     ]
   }
 }

@@ -9,6 +9,7 @@ import { RateLimiter } from './utils/rate-limiter';
 import { CacheManager } from './utils/cache-manager';
 import { GeminiApiScraper } from './scrapers/gemini-api-scraper';
 import { PythonSDKScraper } from './scrapers/python-sdk-scraper';
+import { GeminiCLIScraper } from './scrapers/gemini-cli-scraper';
 
 // Load configuration
 const configPath = path.join(__dirname, '../config/scraper-config.json');
@@ -87,6 +88,24 @@ async function scrapePythonSDK(services: any) {
   return scraper.getMethods();
 }
 
+async function scrapeGeminiCLI(services: any) {
+  if (!config.sources.geminiCLI || !config.sources.geminiCLI.enabled) {
+    console.log(chalk.yellow('⏭️  Gemini CLI scraping is disabled'));
+    return;
+  }
+
+  const scraper = new GeminiCLIScraper({
+    baseUrl: config.sources.geminiCLI.baseUrl,
+    outputDir: path.join(__dirname, '../../gemini-cli'),
+    httpClient: services.httpClient,
+    rateLimiter: services.rateLimiter,
+    cacheManager: services.cacheManager,
+  });
+
+  await scraper.scrapeAll();
+  return scraper.getCommands();
+}
+
 async function scrapeAll() {
   console.log(chalk.bold.cyan('\n' + '='.repeat(70)));
   console.log(chalk.bold.cyan('🚀 Gemini Documentation Tracker - Full Scrape'));
@@ -101,6 +120,7 @@ async function scrapeAll() {
   const results: any = {
     gemini: null,
     pythonSDK: null,
+    geminiCLI: null,
     startTime: new Date().toISOString(),
     endTime: null,
     duration: null,
@@ -114,6 +134,10 @@ async function scrapeAll() {
     // Scrape Python SDK
     console.log(chalk.bold.blue('\n🐍 Scraping Python SDK Documentation...\n'));
     results.pythonSDK = await scrapePythonSDK(services);
+
+    // Scrape Gemini CLI
+    console.log(chalk.bold.blue('\n🖥️  Scraping Gemini CLI Documentation...\n'));
+    results.geminiCLI = await scrapeGeminiCLI(services);
 
     results.endTime = new Date().toISOString();
     results.duration = Date.now() - startTime;
@@ -147,6 +171,10 @@ function printFinalSummary(results: any) {
 
   if (results.pythonSDK) {
     console.log(chalk.green(`🐍 Python SDK: ${results.pythonSDK.length} methods documented`));
+  }
+
+  if (results.geminiCLI) {
+    console.log(chalk.green(`🖥️  Gemini CLI: ${results.geminiCLI.length} commands documented`));
   }
 
   const durationSeconds = (results.duration / 1000).toFixed(2);

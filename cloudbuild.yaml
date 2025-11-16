@@ -1,0 +1,86 @@
+# Cloud Build configuration for automated deployment
+# Triggers on push to main branch
+
+steps:
+  # Step 1: Install dependencies for scraper function
+  - name: 'node:20-alpine'
+    id: 'install-scraper-deps'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        cd cloud-functions/scraper
+        npm ci --production
+
+  # Step 2: Build deployment package for scraper
+  - name: 'alpine'
+    id: 'package-scraper'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        cd cloud-functions/scraper
+        zip -r deploy.zip . -x "*.git*" -x "node_modules/.cache/*"
+
+  # Step 3: Deploy scraper function
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-scraper'
+    entrypoint: 'gcloud'
+    args:
+      - 'functions'
+      - 'deploy'
+      - 'gemini-docs-scraper'
+      - '--gen2'
+      - '--runtime=nodejs20'
+      - '--region=${_REGION}'
+      - '--source=cloud-functions/scraper'
+      - '--entry-point=scrapeHandler'
+      - '--trigger-http'
+      - '--service-account=gemini-docs-scraper@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars=DOCS_BUCKET=${PROJECT_ID}-gemini-docs,SNAPSHOTS_BUCKET=${PROJECT_ID}-gemini-snapshots,PROJECT_ID=$PROJECT_ID'
+      - '--memory=512Mi'
+      - '--timeout=540s'
+      - '--max-instances=1'
+      - '--min-instances=0'
+
+  # Step 4: Run tests (validation)
+  - name: 'node:20-alpine'
+    id: 'validate-deployment'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "Validating deployment..."
+        gcloud functions describe gemini-docs-scraper --gen2 --region=${_REGION} --format=json
+
+  # Step 5: Tag successful deployment
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'tag-deployment'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        git config user.email "cloudbuild@gcp.com"
+        git config user.name "Cloud Build"
+        git tag -a "deploy-$(date +%Y%m%d-%H%M%S)" -m "Deployed to ${_REGION}"
+
+# Substitutions for variables
+substitutions:
+  _REGION: 'us-central1'
+  _ENVIRONMENT: 'production'
+
+# Timeout for entire build
+timeout: 1200s
+
+# Build options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+  dynamicSubstitutions: true
+
+# Artifacts
+artifacts:
+  objects:
+    location: 'gs://${PROJECT_ID}-function-source/builds/$BUILD_ID'
+    paths:
+      - 'cloud-functions/scraper/deploy.zip'
